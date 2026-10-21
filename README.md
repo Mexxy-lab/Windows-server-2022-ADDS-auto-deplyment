@@ -1,4 +1,4 @@
-# AWS Windows Active Directory Lab
+# Windows Server 2022 Active Directory service Deployment using AWS cloud platform
 
 An automated Windows Active Directory lab built with **Terraform, AWS, Ansible, and PowerShell**. The project provisions Windows EC2 instances, configures a domain controller, creates organizational units and user accounts, and optionally joins a Windows client to the domain.
 
