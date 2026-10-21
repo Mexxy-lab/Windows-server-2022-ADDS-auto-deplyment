@@ -16,3 +16,7 @@ override.tf
 override.tf.json
 *_override.tf
 *_override.tf.json
+azure-ad-lab-terraform/.terraform.lock.hcl
+azure-ad-lab-terraform/.terraform/
+azure-ad-lab-terraform/terraform.tfstate
+azure-ad-lab-terraform/terraform.tfstate.backup

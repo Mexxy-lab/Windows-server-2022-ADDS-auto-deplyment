@@ -156,9 +156,28 @@ echo "[INFO] Checking Azure authentication..."
 az account show --output table
 
 AZURE_SUBSCRIPTION_ID="$(
-    terraform -chdir="$TERRAFORM_DIR" console 2>/dev/null <<'EOF' | tr -d '"'
-var.subscription_id
-EOF
+    python3 - "$TERRAFORM_DIR/terraform.tfvars" <<'PY'
+import pathlib
+import re
+import sys
+
+path = pathlib.Path(sys.argv[1])
+
+if not path.is_file():
+    raise SystemExit(f"[ERROR] Missing Terraform variables file: {path}")
+
+content = path.read_text()
+
+match = re.search(
+    r'(?m)^\s*subscription_id\s*=\s*"([^"]+)"\s*(?:#.*)?$',
+    content,
+)
+
+if not match or not match.group(1).strip():
+    raise SystemExit("[ERROR] subscription_id is missing or empty in terraform.tfvars")
+
+print(match.group(1).strip())
+PY
 )"
 
 if [[ -z "$AZURE_SUBSCRIPTION_ID" ]]; then
