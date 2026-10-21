@@ -1,0 +1,65 @@
+# ---
+# - name: Join Windows 10 to the domain
+#   hosts: windows_clients
+#   gather_facts: false
+
+#   vars_files:
+#     - ../group_vars/windows.yml
+#     - ../group_vars/vault.yml  
+
+#   vars:
+
+#   tasks:
+#     - name: Configure the domain controller as DNS server
+#       ansible.windows.win_dns_client:
+#         adapter_names: "*"
+#         dns_servers:
+#           - "{{ domain_dns_server }}"
+
+#     - name: Join the Active Directory domain
+#       microsoft.ad.membership:
+#         dns_domain_name: pumejlab.com
+#         domain_admin_user: "PUMEJLAB\\Administrator"
+#         domain_admin_password: "{{ domain_admin_password }}"
+#         state: domain
+#       register: domain_join
+#       no_log: true
+
+#     - name: Restart the client when required
+#       ansible.windows.win_reboot:
+#         reboot_timeout: 1800
+#       when: domain_join.reboot_required | default(false)
+
+---
+- name: Join Windows client to the AD domain
+  hosts: windows_clients
+  gather_facts: false
+
+  vars_files:
+    - ../group_vars/windows.yml
+    - ../group_vars/vault.yml
+
+  vars:
+    ansible_user: Administrator
+    ansible_password: "{{ domain_admin_password }}"
+
+  tasks:
+    - name: Configure the domain controller as DNS server
+      ansible.windows.win_dns_client:
+        adapter_names: "*"
+        dns_servers:
+          - "{{ domain_dns_server }}"
+
+    - name: Join the Active Directory domain
+      microsoft.ad.membership:
+        dns_domain_name: "{{ domain_name }}"
+        domain_admin_user: "{{ domain_netbios_name }}\\Administrator"
+        domain_admin_password: "{{ domain_admin_password }}"
+        state: domain
+      register: domain_join
+      no_log: true
+
+    - name: Restart the client when required
+      ansible.windows.win_reboot:
+        reboot_timeout: 1800
+      when: domain_join.reboot_required | default(false)

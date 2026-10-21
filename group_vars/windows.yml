@@ -1,0 +1,26 @@
+---
+domain_name: pumejlab.com
+domain_netbios_name: PUMEJLAB
+domain_dn: "DC=pumejlab,DC=com"
+domain_controller_hostname: DC01
+
+management_network: 10.20.1.0/24
+domain_controller_management_ip: 10.20.1.10
+
+internal_network: 10.20.0.0/24
+domain_controller_internal_ip: 10.20.0.1
+dhcp_start_range: 10.20.0.50
+dhcp_end_range: 10.20.0.200
+dhcp_subnet_mask: 255.255.255.0
+
+domain_dns_server: 10.20.1.10
+
+domain_ous:
+  - Admins
+  - Management
+  - IT
+  - HR
+  - Marketing
+  - Sales
+
+domain_users_csv: files/user_accounts_final.csv

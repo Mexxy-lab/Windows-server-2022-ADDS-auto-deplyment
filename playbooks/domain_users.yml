@@ -1,0 +1,39 @@
+---
+- name: Import spreadsheet users into Active Directory
+  hosts: domain_controller
+  gather_facts: false
+
+  vars_files:
+    - ../group_vars/windows.yml
+    - ../group_vars/vault.yml
+
+  vars:
+    ansible_user: 'PUMEJLAB\Administrator'
+    ansible_password: "{{ domain_admin_password }}"
+    remote_csv_path: 'C:\Temp\ADLab\user_accounts_final.csv'
+
+  tasks:
+    - name: Create the import directory on the domain controller
+      ansible.windows.win_file:
+        path: 'C:\Temp\ADLab'
+        state: directory
+
+    - name: Copy the user CSV to the domain controller
+      ansible.windows.win_copy:
+        src: "{{ playbook_dir }}/../files/user_accounts_final.csv"
+        dest: "{{ remote_csv_path }}"
+
+    - name: Create organizational units and import users
+      ansible.windows.win_powershell:
+        script: "{{ lookup('ansible.builtin.file', '../scripts/Create-DomainUsers.ps1') }}"
+        parameters:
+          CSVPath: "{{ remote_csv_path }}"
+          DomainDN: "{{ domain_dn }}"
+          DomainUPNSuffix: "{{ domain_name }}"
+          DefaultUserPassword: "{{ lab_user_password }}"
+      register: user_import_result
+      no_log: true
+
+    - name: Display import completion message
+      ansible.builtin.debug:
+        msg: "User import task completed. Check C:\\Temp\\ADLab\\ADUserImportLog.txt on the domain controller for the detailed results." 

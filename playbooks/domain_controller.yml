@@ -1,0 +1,53 @@
+---
+- name: Prepare and promote the domain controller
+  hosts: domain_controller
+  gather_facts: false
+
+  vars_files:
+    - ../group_vars/windows.yml
+    - ../group_vars/vault.yml
+
+  # Do not define ansible_user here.
+  # A play-level variable would override the set_fact below.
+  vars:
+    ansible_password: "{{ domain_admin_password }}"
+
+  tasks:
+    - name: Install AD DS and management tools
+      ansible.windows.win_feature:
+        name: AD-Domain-Services
+        state: present
+        include_management_tools: true
+      register: adds_install
+
+    - name: Configure the new AD forest
+      ansible.windows.win_powershell:
+        script: |
+          param(
+            [string]$DomainName,
+            [string]$DomainNetBIOSName,
+            [string]$DsrmPassword
+          )
+
+          $computer = Get-CimInstance Win32_ComputerSystem
+
+          if (-not $computer.PartOfDomain) {
+            $securePassword = ConvertTo-SecureString `
+              $DsrmPassword -AsPlainText -Force
+
+            Install-ADDSForest `
+              -DomainName $DomainName `
+              -DomainNetBIOSName $DomainNetBIOSName `
+              -InstallDNS `
+              -SafeModeAdministratorPassword $securePassword `
+              -NoRebootOnCompletion `
+              -Force
+
+            $Ansible.Changed = $true
+          }
+        parameters:
+          DomainName: "{{ domain_name }}"
+          DomainNetBIOSName: "{{ domain_netbios_name }}"
+          DsrmPassword: "{{ dsrm_password }}"
+      register: forest_install
+      no_log: true

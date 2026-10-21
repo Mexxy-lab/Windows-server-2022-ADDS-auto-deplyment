@@ -1,0 +1,66 @@
+---
+- name: Validate Active Directory deployment
+  hosts: domain_controller
+  gather_facts: false
+
+  vars_files:
+    - ../group_vars/windows.yml
+    - ../group_vars/vault.yml
+
+  vars:
+    ansible_user: 'PUMEJLAB\Administrator'
+    ansible_password: "{{ domain_admin_password }}"
+
+  tasks:
+    - name: Verify domain and required OUs and user accounts
+      ansible.windows.win_powershell:
+        script: |
+          $ErrorActionPreference = 'Stop'
+          Import-Module ActiveDirectory
+
+          $domain = Get-ADDomain -Identity '{{ domain_name }}' -ErrorAction Stop
+          $requiredOUs = @(
+            'Admins', 'Management', 'IT',
+            'HR', 'Marketing', 'Sales'
+          )
+
+          foreach ($name in $requiredOUs) {
+            $dn = "OU=$name,$($domain.DistinguishedName)"
+            Get-ADOrganizationalUnit -Identity $dn -ErrorAction Stop |
+              Out-Null
+          }
+
+          $csvPath = 'C:\Temp\ADLab\user_accounts_final.csv'
+          if (-not (Test-Path $csvPath)) {
+            throw "Expected user CSV is missing."
+          }
+
+          $rows = @(Import-Csv -Path $csvPath)
+          $missing = @(
+            foreach ($row in $rows) {
+              $user = Get-ADUser -Filter "SamAccountName -eq '$($row.username)'" `
+                -Properties UserPrincipalName, DistinguishedName
+
+              if (-not $user -or
+                  $user.UserPrincipalName -ne $row.UPN -or
+                  $user.DistinguishedName -notlike "*,OU=$($row.OU),$($domain.DistinguishedName)") {
+                $row.username
+              }
+            }
+          )
+
+          if ($rows.Count -ne 119) {
+            throw "Expected 119 CSV accounts; found $($rows.Count)."
+          }
+
+          if ($missing.Count -gt 0) {
+            throw "Account validation failed for $($missing.Count) CSV entries."
+          }
+
+          Write-Output "VALIDATION_OK: Domain, six OUs, and 119 CSV accounts verified."
+      register: ad_validation
+      no_log: true
+
+    - name: Report validation success
+      ansible.builtin.debug:
+        msg: "Active Directory validation passed."
