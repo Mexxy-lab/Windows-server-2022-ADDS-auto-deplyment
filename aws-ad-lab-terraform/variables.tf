@@ -70,10 +70,10 @@ variable "deploy_windows_client" {
   default = false
 }
 
-variable "windows_client_ami_id" {
-  type    = string
-  default = ""
-}
+# variable "windows_client_ami_id" {
+#   type    = string
+#   default = ""
+# }
 
 variable "root_volume_size_gib" {
   type    = number
