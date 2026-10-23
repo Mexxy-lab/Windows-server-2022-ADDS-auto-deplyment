@@ -215,3 +215,29 @@ This project documents the step-by-step process of setting up an **Active Direct
 This project is part of my **Active Directory and Windows Server Administration portfolio**. For any inquiries, reach out via **[LinkedIn](https://linkedin.com/in/jamesmoore1983)** or check out my **TechGneek YouTube channel**[YouTube](https://youtube.com/@TechGneek)!
 
 ## Built and documented by Paul Umejiofor - PumejLab**
+
+🚀 Project Highlight: Automated Windows Active Directory Lab on Microsoft Azure
+
+I recently completed a hands-on project deploying a Windows Active Directory lab in Azure using Terraform and Ansible.
+
+The project focused on automating the setup of a Windows Server domain controller and a Windows client, configuring Active Directory, and joining the client to the domain.
+
+🔧 Key technologies and skills:
+
+Microsoft Azure
+
+Terraform for Infrastructure as Code (IaC)
+
+Ansible for configuration management and automation
+
+Windows Server and Active Directory
+
+WinRM connectivity and secure credential management
+
+Automated deployment validation and troubleshooting
+
+One of my biggest takeaways was learning how to troubleshoot authentication issues and refine automation to make deployments more reliable and repeatable.
+
+I’m continuing to build my skills in cloud infrastructure, systems administration, and automation, and I look forward to taking on more hands-on projects.
+
+- #MicrosoftAzure #Terraform #Ansible #ActiveDirectory #CloudComputing #InfrastructureAsCode #Automation #ITProjects

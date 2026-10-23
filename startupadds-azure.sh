@@ -294,9 +294,21 @@ $password = __PASSWORD_LITERAL__
 try {
     $securePassword = ConvertTo-SecureString $password -AsPlainText -Force
 
-    # Set the local built-in Administrator password before AD promotion.
-    Set-LocalUser -Name 'Administrator' -Password $securePassword
-    Enable-LocalUser -Name 'Administrator'
+    # Configure the Azure-created account used for initial WinRM access.
+    Set-LocalUser -Name 'labadmin' -Password $securePassword
+    Enable-LocalUser -Name 'labadmin'
+
+    # Set the built-in Administrator password before promoting the forest.
+    # Its identity becomes the domain Administrator during promotion.
+    $builtinAdmin = Get-LocalUser |
+        Where-Object { $_.SID.Value -match '-500$' }
+
+    if (-not $builtinAdmin) {
+        throw "Could not locate the built-in Administrator account (SID ending -500)."
+    }
+
+    Set-LocalUser -Name $builtinAdmin.Name -Password $securePassword
+    Enable-LocalUser -Name $builtinAdmin.Name
 
     Enable-PSRemoting -Force -SkipNetworkProfileCheck
     Set-Service -Name WinRM -StartupType Automatic
@@ -462,7 +474,7 @@ ansible_connection=winrm
 ansible_port=5986
 ansible_winrm_transport=ntlm
 ansible_winrm_server_cert_validation=ignore
-ansible_user=Administrator
+ansible_user=labadmin
 EOF
 
 cd "$PROJECT_DIR"
@@ -500,6 +512,7 @@ fi
 echo "[INFO] Testing authenticated WinRM connectivity..."
 ansible-playbook -i "$ANSIBLE_INVENTORY" \
     playbooks/connection_test.yml \
+    -e "ansible_user=labadmin" \
     --vault-password-file "$VAULT_PASS_FILE"
 
 # 10. Promote DC01 to a domain controller.
@@ -605,7 +618,7 @@ for attempt in $(seq 1 12); do
     if ansible-playbook -i "$ANSIBLE_INVENTORY" \
         playbooks/connection_test.yml \
         --limit dc01 \
-        -e "ansible_user=${NETBIOS_NAME}\\Administrator" \
+        -e "ansible_user=${NETBIOS_NAME}\\labadmin" \
         --vault-password-file "$VAULT_PASS_FILE"; then
         ansible_ok=1
         break
@@ -620,10 +633,37 @@ if [[ "$ansible_ok" -ne 1 ]]; then
     exit 1
 fi
 
+# Switch subsequent playbooks from the local Azure account to the
+# domain Administrator only after authenticated domain access succeeds.
+python3 - "$ANSIBLE_INVENTORY" "$NETBIOS_NAME" <<'PY_SWITCH'
+from pathlib import Path
+import sys
+
+inventory = Path(sys.argv[1])
+netbios = sys.argv[2]
+
+if not netbios or any(c.isspace() for c in netbios):
+    raise SystemExit("ERROR: Invalid NetBIOS domain name.")
+
+text = inventory.read_text(encoding="utf-8")
+old = "ansible_user=labadmin"
+
+if text.count(old) != 1:
+    raise SystemExit(
+        "ERROR: Expected exactly one local labadmin inventory entry "
+        "before switching to the domain account."
+    )
+
+text = text.replace(old, f"ansible_user={netbios}\\labadmin", 1)
+inventory.write_text(text, encoding="utf-8")
+print(f"[OK] Ansible inventory switched to {netbios}\\labadmin.")
+PY_SWITCH
+
 # 13. Create OUs and import users from the existing CSV/playbook workflow.
 echo "[INFO] Creating OUs and importing domain users..."
 ansible-playbook -i "$ANSIBLE_INVENTORY" \
     playbooks/domain_users.yml \
+    -e "ansible_user=${NETBIOS_NAME}\\labadmin" \
     --vault-password-file "$VAULT_PASS_FILE"
 
 # 14. Join the optional Windows client.
@@ -634,6 +674,8 @@ if [[ -n "$CLIENT_PUBLIC_IP" ]]; then
     echo "[INFO] Joining the Windows client to the domain..."
     ansible-playbook -i "$ANSIBLE_INVENTORY" \
         playbooks/domain_client.yml \
+        -e "ansible_user=labadmin" \
+        -e "domain_join_username=${NETBIOS_NAME}\\labadmin" \
         --vault-password-file "$VAULT_PASS_FILE"
 else
     echo "[INFO] Skipping client join; no client VM was deployed."
@@ -643,6 +685,7 @@ fi
 echo "[INFO] Running final Active Directory validation..."
 ansible-playbook -i "$ANSIBLE_INVENTORY" \
     playbooks/validate_deployment.yml \
+    -e "ansible_user=${NETBIOS_NAME}\\labadmin" \
     --vault-password-file "$VAULT_PASS_FILE"
 
 echo "=================================================="

@@ -40,7 +40,7 @@
     - ../group_vars/vault.yml
 
   vars:
-    ansible_user: Administrator
+    # Connection credentials are supplied by inventory or extra vars.
     ansible_password: "{{ domain_admin_password }}"
 
   tasks:
@@ -53,7 +53,7 @@
     - name: Join the Active Directory domain
       microsoft.ad.membership:
         dns_domain_name: "{{ domain_name }}"
-        domain_admin_user: "{{ domain_netbios_name }}\\Administrator"
+        domain_admin_user: "{{ domain_join_username | default(domain_netbios_name ~ '\\\\Administrator') }}"
         domain_admin_password: "{{ domain_admin_password }}"
         state: domain
       register: domain_join
