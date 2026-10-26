@@ -241,3 +241,30 @@ One of my biggest takeaways was learning how to troubleshoot authentication issu
 I’m continuing to build my skills in cloud infrastructure, systems administration, and automation, and I look forward to taking on more hands-on projects.
 
 - #MicrosoftAzure #Terraform #Ansible #ActiveDirectory #CloudComputing #InfrastructureAsCode #Automation #ITProjects
+
+## Architecture Overview
+
+This project automates the deployment of a Windows Active Directory
+environment on AWS using Terraform for infrastructure provisioning
+and Ansible for Windows configuration.
+
+![Windows AD DS AWS Architecture](docs/aws-adds-architecture.png)
+
+### Deployment Components
+
+- **Terraform:** Provisions AWS networking, security groups, and EC2 instances.
+- **Windows Server 2022:** Hosts Active Directory Domain Services and DNS.
+- **Windows client:** Validates domain joining and authentication.
+- **Ansible:** Configures Windows services, creates organizational units,
+  imports domain users, and validates connectivity.
+- **Security:** Restricts administrative access to a trusted IP address
+  and protects credentials using secure secret handling.
+
+### Deployment Workflow
+
+1. Run `startupadds.sh` to validate prerequisites.
+2. Initialize and validate Terraform.
+3. Review and apply the AWS infrastructure plan.
+4. Verify security group rules, Windows readiness, and credentials.
+5. Configure AD DS and DNS, create OUs and users, and join the client.
+6. Validate the deployment and record the results.
