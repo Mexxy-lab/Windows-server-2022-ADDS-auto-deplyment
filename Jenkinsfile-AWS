@@ -16,6 +16,14 @@ pipeline {
         timeout(time: 4, unit: 'HOURS')
     }
 
+    environment {
+        // Terraform installation.
+        TF_IN_AUTOMATION = 'true'
+
+        // Shared Ansible virtual environment.
+        PATH = "/opt/jenkins-tools/ansible/bin:/usr/local/bin:/usr/bin:/bin:${env.PATH}"
+    }    
+
     stages {
 
         // --------------------------------------------------
