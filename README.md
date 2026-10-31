@@ -527,6 +527,39 @@ Afterward, inspect the AWS account for any lab-related resources not managed by 
 
 Keep the Terraform state and project files until cleanup has been verified. Do not manually delete the state file as a substitute for destroying resources.
 
+## Setting up jenkins CI pipeline
+
+1.Create the Jenkins file and credentials for Azure environment deployment.
+
+1a.This pipeline assumes:
+
+- startupadds-azure.sh is in the root of your Git repository.
+- The Jenkins job is configured to retrieve the repository from source control, so checkout scm works.
+- Terraform, Azure CLI, Ansible, and Python are already installed on your CentOS Jenkins agent.
+- Your Azure Terraform configuration and Ansible files are in the locations expected by the script.
+
+1b.Go to Jenkins → Manage Jenkins → Credentials → System → Global credentials → Add Credentials.
+
+Create these four credentials for Azure deployment:
+
+Credential ID                           Kind                                          Value
+azure-service-principal                 Username with password                        Username = Azure Service Principal client ID; Password = client secret
+azure-tenant-id                         Secret text                                   Azure tenant ID
+azure-subscription-id                   Secret text                                   Azure subscription ID
+ansible-vault-password-file             Secret file                                   Your Ansible Vault password file
+
+- The subscription ID in azure-subscription-id must match the subscription_id in your azure-ad-lab-terraform/terraform.tfvars.
+- The script selects the subscription from that file, while Terraform also receives the subscription ID through ARM_SUBSCRIPTION_ID.
+
+2.Create these four credentials for Aws deployment:
+
+- Go to Jenkins → Manage Jenkins → Credentials → System → Global credentials → Add Credentials.
+
+Credential ID                            Kind                                        Contents
+pumej_aws_access_id                      Secret text                                 AWS access key ID
+pumej_aws_secret_key                     Secret text                                 AWS secret access key
+ansible-vault-password-file              Secret file                                 Your Ansible Vault password file
+
 ## Future Improvements
 
 Potential improvements include:

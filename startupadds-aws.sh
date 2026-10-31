@@ -74,7 +74,9 @@ do
     }
 done
 
-VAULT_PASS_FILE="$HOME/.ansible_vault_pass"
+# Use the Jenkins-provided vault password file when available.
+# Otherwise, retain the existing local workstation behavior.
+VAULT_PASS_FILE="${ANSIBLE_VAULT_PASSWORD_FILE:-$HOME/.ansible_vault_pass}"
 [[ -r "$VAULT_PASS_FILE" ]] || {
     echo "[ERROR] Missing vault password file: $VAULT_PASS_FILE"
     exit 1
@@ -149,12 +151,22 @@ terraform plan -out="$TFPLAN_FILE"
 
 echo
 echo "[WARNING] Terraform may create billable AWS resources."
-read -r -p "Apply this plan? Type YES to continue: " CONFIRM
+
+# Jenkins handles approval through its pipeline input step.
+# Local executions retain the original interactive confirmation.
+if [[ "${JENKINS_AUTO_APPROVE:-false}" == "true" ]]; then
+    echo "[INFO] Jenkins deployment approval received."
+    CONFIRM="YES"
+else
+    read -r -p "Apply this plan? Type YES to continue: " CONFIRM
+fi
+
 if [[ "$CONFIRM" != "YES" ]]; then
     echo "[INFO] Cancelled before Terraform apply."
     exit 0
 fi
 
+# Apply the exact Terraform plan generated earlier.
 terraform apply "$TFPLAN_FILE"
 rm -f -- "$TFPLAN_FILE"
 TFPLAN_FILE=""

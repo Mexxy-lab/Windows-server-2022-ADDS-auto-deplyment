@@ -48,8 +48,9 @@ echo " Terraform: $TERRAFORM_DIR"
 echo "=================================================="
 
 # 1. Check required commands and project files.
+# Verify that all tools needed for Azure, Terraform, and Ansible deployment exist.
 for cmd in terraform az ansible-playbook ansible ansible-inventory \
-           ansible-vault python3; do
+           ansible-vault ansible-galaxy python3; do
     command -v "$cmd" >/dev/null 2>&1 || {
         echo "[ERROR] Required command not found: $cmd"
         exit 1
@@ -74,7 +75,9 @@ do
     }
 done
 
-VAULT_PASS_FILE="$HOME/.ansible_vault_pass"
+# Use the Jenkins-provided Vault password file when available.
+# Keep the existing local workstation behavior as the fallback.
+VAULT_PASS_FILE="${ANSIBLE_VAULT_PASSWORD_FILE:-$HOME/.ansible_vault_pass}"
 [[ -r "$VAULT_PASS_FILE" ]] || {
     echo "[ERROR] Missing Ansible Vault password file: $VAULT_PASS_FILE"
     exit 1
@@ -226,13 +229,22 @@ unset BOOTSTRAP_PASSWORD
 
 echo
 echo "[WARNING] This plan may create billable Azure resources."
-read -r -p "Apply this Azure plan? Type YES to continue: " CONFIRM
+
+# Jenkins handles approval through its pipeline input step.
+# Local executions retain the original interactive confirmation.
+if [[ "${JENKINS_AUTO_APPROVE:-false}" == "true" ]]; then
+    echo "[INFO] Jenkins deployment approval received."
+    CONFIRM="YES"
+else
+    read -r -p "Apply this Azure plan? Type YES to continue: " CONFIRM
+fi
 
 if [[ "$CONFIRM" != "YES" ]]; then
     echo "[INFO] Cancelled before Terraform apply."
     exit 0
 fi
 
+# Apply the exact Terraform plan generated earlier.
 terraform apply "$TFPLAN_FILE"
 rm -f -- "$TFPLAN_FILE"
 TFPLAN_FILE=""

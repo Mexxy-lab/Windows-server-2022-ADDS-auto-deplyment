@@ -1,0 +1,259 @@
+
+pipeline {
+
+    // Run on the Jenkins agent with Terraform, AWS CLI, Ansible,
+    // Trivy, and the SonarQube Scanner available.
+    agent any
+
+    options {
+        // Include timestamps in build logs.
+        timestamps()
+
+        // Prevent two AWS AD deployments from running simultaneously.
+        disableConcurrentBuilds()
+
+        // Allow sufficient time for Windows provisioning and AD configuration.
+        timeout(time: 4, unit: 'HOURS')
+    }
+
+    stages {
+
+        // --------------------------------------------------
+        // 1. Checkout AWS AD Lab repository
+        // --------------------------------------------------
+
+        stage('SCM Checkout') {
+            steps {
+                checkout scm
+
+                sh '''
+                    echo "AWS Windows Server 2022 AD DS Deployment"
+                    git log -1 --oneline
+                '''
+            }
+        }
+
+        // --------------------------------------------------
+        // 2. Validate deployment script and prerequisites
+        // --------------------------------------------------
+
+        stage('Pre-deployment Validation') {
+            steps {
+                sh '''
+                    set -e
+
+                    # Confirm the AWS deployment script exists.
+                    test -f startupadds-aws.sh
+
+                    # Check Bash syntax without executing the deployment.
+                    bash -n startupadds-aws.sh
+
+                    # Confirm required automation tools are installed.
+                    for cmd in terraform aws ansible-playbook \
+                               ansible ansible-inventory ansible-vault \
+                               ansible-galaxy python3; do
+                        command -v "$cmd" >/dev/null 2>&1 || {
+                            echo "ERROR: Missing required command: $cmd"
+                            exit 1
+                        }
+                    done
+
+                    # Confirm Trivy is available on the Jenkins agent.
+                    command -v trivy >/dev/null 2>&1 || {
+                        echo "ERROR: Trivy is not installed or not in PATH."
+                        exit 1
+                    }
+
+                    echo "AWS deployment prerequisites passed."
+                '''
+            }
+        }
+
+        // --------------------------------------------------
+        // 3. Trivy filesystem security scan
+        // --------------------------------------------------
+
+        stage('Trivy Security Scan') {
+            steps {
+                sh '''
+                    set -e
+
+                    # Display the installed Trivy version.
+                    trivy version
+
+                    # Scan the repository for:
+                    # - Vulnerable dependencies and packages.
+                    # - Infrastructure-as-Code misconfigurations.
+                    # - Potentially exposed secrets.
+                    #
+                    # Fail the pipeline when HIGH or CRITICAL findings
+                    # are detected.
+                    #
+                    # Skip generated files and directories that do not
+                    # need to be included in the repository scan.
+                    trivy fs \
+                        --scanners vuln,misconfig,secret \
+                        --severity HIGH,CRITICAL \
+                        --exit-code 1 \
+                        --format table \
+                        --skip-dirs .git \
+                        --skip-dirs .venv \
+                        --skip-dirs logs \
+                        --skip-dirs .terraform \
+                        .
+                '''
+            }
+        }
+
+        // --------------------------------------------------
+        // 4. SonarQube source-code and configuration analysis
+        // --------------------------------------------------
+
+        stage('SonarQube Analysis') {
+            steps {
+                script {
+
+                    // Use the SonarQube Scanner installation configured
+                    // under Manage Jenkins > Tools.
+                    def scannerHome = tool 'SonarScanner'
+
+                    // Use the SonarQube server configured under
+                    // Manage Jenkins > System.
+                    withSonarQubeEnv('SonarQube') {
+
+                        sh """
+                            set -e
+
+                            # Run SonarQube analysis against the checked-out repository.
+                            "${scannerHome}/bin/sonar-scanner" \ \
+                                -Dsonar.projectKey=aws-windows-ad-lab \
+                                -Dsonar.projectName="AWS Windows AD Lab" \
+                                -Dsonar.projectVersion=1.0 \
+                                -Dsonar.sources=. \
+                                -Dsonar.sourceEncoding=UTF-8 \
+                                -Dsonar.exclusions="**/.git/**,**/.venv/**,**/.terraform/**,**/logs/**,**/vault.yml"
+                        """
+                    }
+                }
+            }
+        }
+
+        // --------------------------------------------------
+        // 5. Wait for SonarQube Quality Gate
+        // --------------------------------------------------
+
+        stage('SonarQube Quality Gate') {
+            steps {
+                timeout(time: 10, unit: 'MINUTES') {
+
+                    // Stop the pipeline if SonarQube reports a failed
+                    // quality gate.
+                    waitForQualityGate abortPipeline: true
+                }
+            }
+        }
+
+        // --------------------------------------------------
+        // 6. Manual deployment approval
+        // --------------------------------------------------
+
+        stage('Deployment Approval') {
+            steps {
+                script {
+
+                    // Require explicit approval before creating
+                    // billable AWS resources.
+                    input(
+                        message: 'Approve deployment of Windows Server 2022 AD DS infrastructure in AWS? This may create billable resources.',
+                        ok: 'Approve AWS Deployment'
+                    )
+                }
+            }
+        }
+
+        // --------------------------------------------------
+        // 7. Deploy AWS infrastructure and configure AD DS
+        // --------------------------------------------------
+
+        stage('Deploy AWS Active Directory') {
+            steps {
+
+                // Retrieve AWS credentials and Ansible Vault password
+                // securely from Jenkins Credentials.
+                withCredentials([
+
+                    // AWS access key ID.
+                    string(
+                        credentialsId: 'pumej_aws_access_id',
+                        variable: 'AWS_ACCESS_KEY_ID'
+                    ),
+
+                    // AWS secret access key.
+                    string(
+                        credentialsId: 'pumej_aws_secret_key',
+                        variable: 'AWS_SECRET_ACCESS_KEY'
+                    ),
+
+                    // Ansible Vault password stored as a Jenkins Secret file.
+                    file(
+                        credentialsId: 'ansible-vault-password-file',
+                        variable: 'ANSIBLE_VAULT_PASSWORD_FILE'
+                    )
+                ]) {
+
+                    // The Jenkins approval stage has already been completed.
+                    withEnv(['JENKINS_AUTO_APPROVE=true']) {
+
+                        sh '''
+                            # Do not print commands that might expose secrets.
+                            set +x
+
+                            # Restrict access to the deployment script.
+                            chmod 700 startupadds-aws.sh
+
+                            # Run the existing AWS deployment automation.
+                            ./startupadds-aws.sh
+                        '''
+                    }
+                }
+            }
+        }
+
+        // --------------------------------------------------
+        // 8. Deployment completion
+        // --------------------------------------------------
+
+        stage('Deployment Summary') {
+            steps {
+                echo 'AWS Windows Server 2022 AD DS deployment completed.'
+                echo 'Trivy scan and SonarQube quality gate passed.'
+                echo 'Review the deployment log and Terraform outputs.'
+            }
+        }
+    }
+
+    // --------------------------------------------------
+    // Pipeline completion and failure handling
+    // --------------------------------------------------
+
+    post {
+
+        success {
+            echo 'SUCCESS: AWS Active Directory deployment completed.'
+            echo 'Trivy and SonarQube checks passed.'
+        }
+
+        failure {
+            echo 'FAILED: AWS Active Directory deployment encountered an error.'
+            echo 'Review the Jenkins console output and scan results.'
+        }
+
+        aborted {
+            echo 'Deployment was aborted or approval was declined.'
+        }
+
+        always {
+            echo 'AWS AD DS Jenkins pipeline execution finished.'
+        }
+    }
+}

@@ -268,3 +268,43 @@ and Ansible for Windows configuration.
 4. Verify security group rules, Windows readiness, and credentials.
 5. Configure AD DS and DNS, create OUs and users, and join the client.
 6. Validate the deployment and record the results.
+
+## Configuring sonarqube to jenkins server
+
+A. Install the Jenkins SonarQube plugin
+
+- Go to Manage Jenkins → Plugins → Available plugins.
+
+- Search for and install: SonarQube Scanner for Jenkins Restart Jenkins if requested.
+
+B. Configure the SonarQube server
+
+- Go to Manage Jenkins → System → SonarQube installations.
+
+Add an installation:
+
+Setting                                 Value
+Name                                    SonarQube
+Server URL                              <http://192.168.1.112:9000>
+Server authentication token             Your SonarQube Jenkins token (Create this from sonarqube)
+
+- Create a SonarQube token from your SonarQube account under My Account → Security → Generate Tokens, then add it to Jenkins as a Secret text credential and select it in the server configuration.
+
+C. Configure the SonarScanner tool
+
+- Go to Manage Jenkins → Tools → SonarQube Scanner installations.
+- This (SonarScanner) name must match the Jenkinsfile's tool 'SonarScanner' declaration.
+
+Setting                                   Value
+Name                                      SonarScanner
+Install automatically                     Checked
+
+D. Configure the SonarQube webhook
+
+- This is important because Jenkins needs to receive the Quality Gate result.
+
+In SonarQube:
+
+1. Go to Administration → Configuration → Webhooks.
+2. Add a webhook.
+3. Set its URL to: <http://YOUR-JENKINS-SERVER:8080/sonarqube-webhook/>
