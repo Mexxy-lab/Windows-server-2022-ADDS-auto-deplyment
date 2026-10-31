@@ -125,7 +125,7 @@ pipeline {
                             set -e
 
                             # Run SonarQube analysis against the checked-out repository.
-                            "${scannerHome}/bin/sonar-scanner" \ \
+                            "${scannerHome}/bin/sonar-scanner" \
                                 -Dsonar.projectKey=aws-windows-ad-lab \
                                 -Dsonar.projectName="AWS Windows AD Lab" \
                                 -Dsonar.projectVersion=1.0 \
